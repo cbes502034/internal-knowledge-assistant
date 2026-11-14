@@ -1,0 +1,7 @@
+question,expected_doc_title,expected_article_no,as_dept,as_role,should_refuse
+廢溶劑放多久要處理,廢棄物處理SOP,2,ops,employee,false
+酸性和鹼性可以放在一起嗎,化學品管理SOP,3,ops,employee,false
+化學品洩漏要通知誰,緊急應變SOP,1,sales,employee,false
+清運聯單要保存多久,廢棄物處理SOP,3,ops,employee,false
+員工旅遊補助怎麼申請,,,ops,employee,true
+廢溶劑放多久要處理,,,sales,employee,true
