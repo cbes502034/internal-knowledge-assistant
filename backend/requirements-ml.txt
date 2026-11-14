@@ -1,3 +1,0 @@
-# 做到「嵌入模型」那一步再安裝（體積大）：pip install -r requirements-ml.txt
-# 若改用 Ollama 提供嵌入（ollama pull bge-m3），可以不裝這個檔
-sentence-transformers>=3.0
