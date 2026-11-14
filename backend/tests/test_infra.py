@@ -1,4 +1,4 @@
-"""骨架本身的測試：現在就應該全部通過（不需要資料庫與模型）。"""
+"""骨架本身的測試（不需要資料庫與模型）。"""
 
 EXPECTED_ROUTES = {
     ("POST", "/api/v1/auth/token"), ("POST", "/api/v1/auth/revoke"),
@@ -37,17 +37,14 @@ def test_protected_endpoint_without_token_returns_401_in_unified_format(client):
     assert "message" in r.json()
 
 
+def test_garbage_token_is_rejected(client):
+    r = client.get("/api/v1/me", headers={"Authorization": "Bearer not-a-jwt"})
+    assert r.status_code == 401
+
+
 def test_validation_error_uses_unified_format(client):
     r = client.post("/api/v1/users", json={"email": "not-an-email", "password": "x", "dept_code": "ops"})
     assert r.status_code == 422
     body = r.json()
     assert body["code"] == "validation_error"
     assert {f["field"] for f in body["fields"]} == {"email", "password"}
-
-
-def test_unimplemented_logic_returns_501_and_names_the_function(client):
-    r = client.post("/api/v1/users",
-                    json={"email": "a@example.com", "password": "long-enough-pw", "dept_code": "ops"})
-    assert r.status_code == 501
-    assert r.json()["code"] == "not_implemented"
-    assert "register_user" in r.json()["message"]

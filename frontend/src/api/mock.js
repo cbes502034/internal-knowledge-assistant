@@ -11,8 +11,8 @@ const messages = {
       id: 2, role: 'assistant', refused: false, feedback: null, latency_ms: 3180, created_at: now(),
       content: '廢溶劑暫存超過 90 天，須聯絡合格清運廠商處理。[1]',
       citations: [
-        { rank: 1, doc_title: '廢棄物處理SOP（模擬）', version: 'v2', article_no: 2, score: 0.82 },
-        { rank: 2, doc_title: '廢棄物處理SOP（模擬）', version: 'v2', article_no: 3, score: 0.61 },
+        { rank: 1, doc_title: '廢棄物處理SOP（模擬）', version: 'v2', article_no: 2, locator: '第2條', score: 0.82 },
+        { rank: 2, doc_title: '廢棄物處理SOP（模擬）', version: 'v2', article_no: 3, locator: '第3條', score: 0.61 },
       ],
     },
   ],

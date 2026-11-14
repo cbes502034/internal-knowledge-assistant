@@ -1,51 +1,60 @@
-"""對話與訊息的讀寫。規則：只能操作自己的對話；別人的一律當作不存在（回 404）。"""
+"""對話與訊息的讀寫。規則：只能操作自己的對話；別人的一律當作不存在（回 404）。
+
+為什麼回 404 而不是 403：403 等於告訴對方「這個對話存在，只是你不能看」，
+404 則不透露任何資訊。
+"""
 import uuid
 
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
+from app.errors import AppError, not_found
 from app.models import Conversation, Message, User
+from app.models.chat import DEFAULT_TITLE
 
 
 def get_owned(db: Session, *, user: User, conversation_id: uuid.UUID) -> Conversation:
-    """TODO：取得「屬於這位使用者」的對話，其他函式都先呼叫它。
-
-    1. db.get(Conversation, conversation_id)
-    2. 不存在，或 user_id 不是這位使用者 → raise not_found("找不到對話")
-       （為什麼別人的對話回 404 而不是 403？）
-    """
-    raise NotImplementedError("services.conversation.get_owned 尚未實作")
+    conversation = db.get(Conversation, conversation_id)
+    if conversation is None or conversation.user_id != user.id:
+        raise not_found("找不到對話")
+    return conversation
 
 
 def create(db: Session, *, user: User, title: str | None) -> Conversation:
-    """TODO：新增對話。title 為空時用預設值。"""
-    raise NotImplementedError("services.conversation.create 尚未實作")
+    conversation = Conversation(user_id=user.id, title=(title or "").strip() or DEFAULT_TITLE)
+    db.add(conversation)
+    db.commit()
+    return conversation
 
 
 def list_for_user(db: Session, *, user: User, limit: int, offset: int) -> tuple[list[Conversation], int]:
-    """TODO：自己的對話列表，新的在前。回傳 (這一頁, 總筆數)。"""
-    raise NotImplementedError("services.conversation.list_for_user 尚未實作")
+    query = select(Conversation).where(Conversation.user_id == user.id)
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    items = db.scalars(query.order_by(Conversation.created_at.desc()).limit(limit).offset(offset))
+    return list(items), total
 
 
 def delete(db: Session, *, user: User, conversation_id: uuid.UUID) -> None:
-    """TODO：刪除自己的對話（訊息與出處會連動刪除，見 models/chat.py 的 cascade）。"""
-    raise NotImplementedError("services.conversation.delete 尚未實作")
+    """刪除自己的對話；訊息與出處由 cascade 一起刪除。"""
+    db.delete(get_owned(db, user=user, conversation_id=conversation_id))
+    db.commit()
 
 
 def list_messages(db: Session, *, user: User, conversation_id: uuid.UUID) -> list[Message]:
-    """TODO：對話內的訊息（含出處），依時間排序。
-
-    提示：先 get_owned，再回傳 conversation.messages；
-    訊息多時會有 N+1 查詢問題，可用 selectinload(Message.citations) 一次載入。
-    """
-    raise NotImplementedError("services.conversation.list_messages 尚未實作")
+    """對話內的訊息與出處。用 selectinload 一次載入全部出處，避免每則訊息各查一次（N+1 查詢）。"""
+    conversation = get_owned(db, user=user, conversation_id=conversation_id)
+    return list(db.scalars(
+        select(Message).where(Message.conversation_id == conversation.id)
+        .options(selectinload(Message.citations)).order_by(Message.id)))
 
 
 def set_feedback(db: Session, *, user: User, message_id: int, value: str | None) -> Message:
-    """TODO：設定某則 AI 回覆的回饋（up／down／None）。
-
-    1. 取得訊息；不存在 → not_found
-    2. 用 get_owned 確認這則訊息的對話屬於這位使用者
-    3. 只有 role="assistant" 的訊息可以被回饋，否則 AppError(422, ...)
-    4. 更新 feedback、commit、回傳
-    """
-    raise NotImplementedError("services.conversation.set_feedback 尚未實作")
+    message = db.get(Message, message_id)
+    if message is None:
+        raise not_found("找不到訊息")
+    get_owned(db, user=user, conversation_id=message.conversation_id)
+    if message.role != "assistant":
+        raise AppError(422, "not_assistant_message", "只能對 AI 回覆給回饋")
+    message.feedback = value
+    db.commit()
+    return message

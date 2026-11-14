@@ -1,11 +1,11 @@
 """部門、使用者、更新權杖。"""
 from datetime import datetime
 
-from sqlalchemy import (BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Identity,
+from sqlalchemy import (BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Identity, Integer,
                         SmallInteger, String, func)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base
+from app.models.base import Base, utcnow
 
 
 class Department(Base):
@@ -31,13 +31,16 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), default="employee")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))   # 閒置判斷用
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # 連續登入失敗次數
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))     # 鎖定到何時
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now())
 
-    department: Mapped[Department] = relationship()
+    # 幾乎每次讀使用者都要顯示部門，直接 JOIN 一起載入，避免多一次查詢
+    department: Mapped[Department] = relationship(lazy="joined")
 
 
 class RefreshToken(Base):
-    """更新權杖：只存雜湊；登出與閒置時填入 revoked_at。"""
+    """更新權杖：只存雜湊；登出、閒置、輪替時填入 revoked_at。"""
     __tablename__ = "refresh_tokens"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -45,4 +48,4 @@ class RefreshToken(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # SHA-256 十六進位
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now())

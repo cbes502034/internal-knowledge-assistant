@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -28,19 +28,23 @@ def list_documents(
 
 @router.post("", response_model=DocumentOut, status_code=202)
 def upload_document(
+    background: BackgroundTasks,
     file: UploadFile = File(...),
-    title: str = Form(...),
+    title: str = Form(..., min_length=1, max_length=255),
     dept_code: str = Form(...),
     level: Literal["public", "dept", "restricted"] = Form(default="public"),
-    version: str = Form(default="v1"),
+    version: str = Form(default="v1", max_length=30),
     effective_date: date | None = Form(default=None),
+    source: str | None = Form(default=None, max_length=500),
     admin: User = Depends(require_it_admin),
     db: Session = Depends(get_db),
 ):
-    """上傳文件並進入處理（202：已受理）。"""
-    return document_service.upload(
-        db, actor=admin, filename=file.filename or "", data=file.file.read(),
-        title=title, dept_code=dept_code, level=level, version=version, effective_date=effective_date)
+    """上傳文件（202：已受理），切塊與向量化在背景執行。"""
+    document = document_service.upload(
+        db, actor=admin, filename=file.filename or "", data=file.file.read(), title=title, dept_code=dept_code,
+        level=level, version=version, effective_date=effective_date, source=source)
+    background.add_task(document_service.process_in_background, document.id)
+    return document
 
 
 @router.get("/{document_id}", response_model=DocumentDetailOut)
@@ -56,7 +60,9 @@ def patch_document(document_id: int, body: DocumentPatch, admin: User = Depends(
 
 
 @router.post("/{document_id}/processing-jobs", response_model=DocumentOut, status_code=202)
-def reprocess_document(document_id: int, admin: User = Depends(require_it_admin),
+def reprocess_document(document_id: int, background: BackgroundTasks, admin: User = Depends(require_it_admin),
                        db: Session = Depends(get_db)):
-    """重新處理：清除舊段落後重新切塊、向量化。"""
-    return document_service.reprocess(db, actor=admin, document_id=document_id)
+    """重新處理：清除舊段落後重新切塊、向量化（背景執行）。"""
+    document = document_service.request_reprocess(db, actor=admin, document_id=document_id)
+    background.add_task(document_service.process_in_background, document.id)
+    return document

@@ -1,0 +1,13 @@
+file,title,dept_code,level,version,effective_date,source
+raw/laws/職業安全衛生法.txt,職業安全衛生法,ops,public,114.12.19,2025-12-19,https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=N0060001
+raw/laws/危害性化學品標示及通識規則.txt,危害性化學品標示及通識規則,ops,public,115.08.26,2026-08-26,https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=N0060054
+raw/laws/廢棄物清理法.txt,廢棄物清理法,ops,public,115.07.15,2026-07-15,https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=O0050001
+raw/mock/化學品管理SOP.txt,化學品管理SOP,ops,dept,v1,,模擬資料
+raw/mock/廢棄物處理SOP.txt,廢棄物處理SOP,ops,dept,v2,,模擬資料
+raw/mock/緊急應變SOP.txt,緊急應變SOP,ops,public,v1,,模擬資料
+raw/mock/設計文件管制辦法.txt,設計文件管制辦法,rd,restricted,v1,,模擬資料
+raw/mock/報價審核作業規定.txt,報價審核作業規定,sales,dept,v1,,模擬資料
+raw/mock/差旅費報支規定.txt,差旅費報支規定,finance,public,v1,,模擬資料
+raw/mock/資訊安全作業規定.txt,資訊安全作業規定,gm_office,public,v1,,模擬資料
+raw/mock/營業秘密管理辦法.txt,營業秘密管理辦法,gm_office,restricted,v1,,模擬資料
+raw/mock/AI助理使用說明.md,AI助理使用說明,gm_office,public,v1,,模擬資料

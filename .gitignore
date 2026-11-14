@@ -10,3 +10,4 @@ data/uploads/*
 !data/uploads/.gitkeep
 backups/
 *.log
+*.local

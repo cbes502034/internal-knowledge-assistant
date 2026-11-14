@@ -1,5 +1,6 @@
 # 開發：docker compose up -d db          （只起資料庫，後端與前端在本機跑）
-# 整套：docker compose up --build         （db + api + nginx，瀏覽 http://localhost:8080）
+# 整套：docker compose up --build         （db + api + nginx，瀏覽 http://localhost:${WEB_PORT}）
+# 模型：Ollama 跑在本機（不在容器內），api 經 host.docker.internal 連過去。
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -11,7 +12,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
     ports:
-      - "127.0.0.1:5432:5432"   # 只綁本機，不對外開放
+      - "127.0.0.1:${DB_PORT:-5432}:5432"   # 只綁本機，不對外開放
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -24,6 +25,11 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       OLLAMA_URL: http://host.docker.internal:11434
+      UPLOAD_DIR: /srv/data/uploads
+      TRUST_PROXY_HEADERS: "true"           # 只有 Nginx 連得到 api，可以信任它帶來的 X-Real-IP
+    volumes:
+      - uploads:/srv/data/uploads
+      - ./data:/data:ro                     # 匯入用：docker compose exec api python -m scripts.import_docs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -37,9 +43,11 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
     ports:
-      - "8080:80"
+      - "${WEB_PORT:-8080}:80"
     depends_on:
       - api
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  uploads:

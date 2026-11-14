@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 from typing import Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 T = TypeVar("T")
 
@@ -49,9 +49,10 @@ class UserPatch(BaseModel):
 class UserOut(ORMModel):
     id: int
     email: EmailStr
-    role: str
+    role: Literal["employee", "manager", "it_admin"]
     is_active: bool
     department: DepartmentOut
+    last_active_at: datetime | None = None
 
 
 # ---------- 對話 ----------
@@ -68,12 +69,20 @@ class ConversationOut(ORMModel):
 class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
 
+    @field_validator("content")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("問題不能是空白")
+        return value.strip()
+
 
 class CitationOut(ORMModel):
     rank: int
     doc_title: str
     version: str | None
     article_no: int
+    locator: str | None
     score: float | None
 
 
@@ -99,6 +108,7 @@ class DocumentOut(ORMModel):
     version: str
     level: Literal["public", "dept", "restricted"]
     status: Literal["pending", "ready", "failed", "deprecated"]
+    chunk_mode: Literal["article", "window"]
     source: str | None
     effective_date: date | None
     dept_id: int
@@ -116,20 +126,27 @@ class DocumentPatch(BaseModel):
 
 # ---------- 評測 ----------
 class EvalRunCreate(BaseModel):
-    embed_model: str | None = None       # 不填則用設定檔的模型
-    config: dict | None = None
+    """沒填的參數用目前的系統設定。"""
+    mode: Literal["hybrid", "vector", "keyword"] | None = None
+    top_k: int | None = Field(default=None, ge=1, le=20)
+    threshold: float | None = Field(default=None, ge=0, le=1)
+    keyword_weight: float | None = Field(default=None, ge=0, le=1)
 
 
 class EvalMetrics(BaseModel):
+    cases: int
     hit_at_1: float
     hit_at_3: float
     mrr: float
+    false_refusal_rate: float
     refuse_accuracy: float
+    permission_pass: float
+    leaks: int
     p50_ms: int
     p95_ms: int
 
 
-class EvalRunOut(ORMModel):
+class EvalRunOut(BaseModel):
     id: int
     embed_model: str
     config: dict | None
@@ -138,11 +155,17 @@ class EvalRunOut(ORMModel):
     metrics: EvalMetrics | None = None
 
 
-class EvalResultOut(ORMModel):
+class EvalResultOut(BaseModel):
     case_id: int
     question: str
+    kind: Literal["answer", "refuse", "permission"]
+    expected: str | None
+    as_dept: str
+    as_role: str
     hit_rank: int | None
     refused: bool
+    leaked: bool
+    top_hit: str | None
     latency_ms: int | None
 
 
@@ -154,3 +177,8 @@ class AuditLogOut(ORMModel):
     target: str | None
     ip: str | None
     created_at: datetime
+
+    @field_validator("ip", mode="before")
+    @classmethod
+    def _ip_to_str(cls, value):
+        return None if value is None else str(value)     # 資料庫回傳的是 ipaddress 物件

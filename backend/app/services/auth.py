@@ -1,70 +1,171 @@
-"""註冊、登入、權杖更新、撤銷、由 JWT 取得使用者。（對應企劃書 圖 6 循序圖）
+"""註冊、登入、權杖更新、撤銷、由 JWT 取得使用者。（對應企劃書 圖 6 循序圖）"""
+from datetime import datetime, timedelta, timezone
 
-依賴 app.core.security（密碼雜湊、JWT、refresh token）——建議先完成那個檔案。
-"""
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import User
+from app.config import get_settings
+from app.core import security
+from app.errors import AppError, conflict, unauthorized
+from app.models import RefreshToken, User
+from app.services import audit
+from app.services import user as user_service
+
+# 每個請求都更新「最後活動時間」會變成每個請求都寫一次資料庫；超過這個間隔才寫，
+# 閒置判斷的誤差最多就是這麼久，換來大幅減少寫入。
+ACTIVITY_WRITE_INTERVAL = timedelta(seconds=60)
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def _idle_timeout() -> AppError:
+    return AppError(401, "idle_timeout", "閒置過久，請重新登入", {"WWW-Authenticate": "Bearer"})
+
+
+def _is_idle(user: User, now: datetime) -> bool:
+    limit = timedelta(minutes=get_settings().idle_timeout_min)
+    return user.last_active_at is not None and now - user.last_active_at > limit
+
+
+def _issue_tokens(db: Session, user: User) -> tuple[str, str]:
+    """簽發 access JWT 與新的 refresh token（資料庫只存雜湊）。"""
+    raw, token_hash = security.new_refresh_token()
+    db.add(RefreshToken(user_id=user.id, token_hash=token_hash,
+                        expires_at=_now() + timedelta(hours=get_settings().refresh_ttl_hours)))
+    return security.create_access_token(user), raw
 
 
 def register_user(db: Session, *, email: str, password: str, dept_code: str) -> User:
-    """TODO：註冊。
-
-    1. 用 services.user.get_department_by_code 找部門；找不到 → AppError(422, "unknown_department", ...)
-    2. email 是否已存在？是 → raise conflict("email_taken", "此 email 已註冊")
-       （提示：也可以直接 insert，捕捉 IntegrityError；想想兩種做法在「同時註冊」時的差別）
-    3. security.hash_password(password) → 建立 User(role="employee")
-    4. db.add、db.commit、回傳 user
-    """
-    raise NotImplementedError("services.auth.register_user 尚未實作")
+    """註冊一般員工。角色一律是 employee，主管與 IT 由 IT 管理員調整。"""
+    department = user_service.require_department(db, dept_code)
+    email = _normalize_email(email)
+    if db.scalar(select(User.id).where(User.email == email)) is not None:
+        raise conflict("email_taken", "此 email 已註冊")
+    user = User(email=email, password_hash=security.hash_password(password), dept_id=department.id, role="employee")
+    db.add(user)
+    try:
+        # 先查再寫在「同時註冊」時仍可能撞在一起；交給資料庫的唯一約束做最後把關
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise conflict("email_taken", "此 email 已註冊") from None
+    audit.record(db, user=user, action="user.register", target=f"user:{user.id}")
+    db.commit()
+    return user
 
 
 def login(db: Session, *, email: str, password: str, ip: str | None) -> tuple[str, str]:
-    """TODO：帳密登入，回傳 (access JWT, refresh token 原文)。
+    """帳密登入，回傳 (access JWT, refresh token 原文)。
 
-    1. 以 email 找使用者
-    2. 找不到、密碼錯、is_active=False → 一律 raise unauthorized("帳號或密碼錯誤")
-       （為什麼三種情況要回同一個訊息？）
-    3. security.create_access_token(user)
-    4. security.new_refresh_token() 取得 (原文, 雜湊)；把雜湊與到期時間存進 RefreshToken
-    5. 更新 user.last_active_at
-    6. audit.record(db, user=user, action="login", ip=ip)
-    7. 回傳 (access, refresh 原文)
-    進階（P1）：連續失敗 5 次鎖定 15 分鐘
+    帳號不存在、密碼錯誤、帳號停用一律回同一個訊息：不讓人從錯誤訊息猜出哪些帳號存在。
+    連續失敗達上限就鎖定一段時間，擋下暴力猜密碼。
     """
-    raise NotImplementedError("services.auth.login 尚未實作")
+    settings = get_settings()
+    now = _now()
+    user = db.scalar(select(User).where(User.email == _normalize_email(email)))
+    if user is None:
+        security.burn_verify_time(password)
+        raise unauthorized("帳號或密碼錯誤")
+
+    if user.locked_until is not None and user.locked_until > now:
+        wait = int((user.locked_until - now).total_seconds()) + 1
+        raise AppError(429, "too_many_attempts", "登入失敗次數過多，請稍後再試", {"Retry-After": str(wait)})
+
+    if not security.verify_password(password, user.password_hash):
+        user.failed_logins += 1
+        if user.failed_logins >= settings.login_max_failures:
+            user.locked_until = now + timedelta(minutes=settings.login_lock_min)
+            user.failed_logins = 0
+            audit.record(db, user=user, action="login.locked", ip=ip)
+        else:
+            audit.record(db, user=user, action="login.failed", ip=ip)
+        db.commit()
+        raise unauthorized("帳號或密碼錯誤")
+
+    if not user.is_active:
+        raise unauthorized("帳號或密碼錯誤")
+
+    user.failed_logins = 0
+    user.locked_until = None
+    user.last_active_at = now
+    if security.needs_rehash(user.password_hash):
+        user.password_hash = security.hash_password(password)
+    access, raw_refresh = _issue_tokens(db, user)
+    audit.record(db, user=user, action="login", ip=ip)
+    db.commit()
+    return access, raw_refresh
 
 
 def refresh(db: Session, *, raw_refresh_token: str) -> tuple[str, str]:
-    """TODO：用 refresh token 換新的 access JWT，並「輪替」refresh token。
+    """用 refresh token 換新的 access JWT，並「輪替」refresh token（舊的作廢、發新的）。
 
-    1. security.hash_token(raw_refresh_token) → 以雜湊找 RefreshToken
-    2. 找不到、已撤銷（revoked_at 有值）、已過期 → raise unauthorized()
-    3. 閒置檢查：now - user.last_active_at 超過 settings.idle_timeout_min → 撤銷並 raise unauthorized()
-    4. 輪替：把舊的標記 revoked_at=now，發一個新的（同 login 的步驟 4）
-       （為什麼要輪替？如果舊 token 被偷走重複使用，伺服器怎麼發現？）
-    5. 回傳 (新的 access, 新的 refresh 原文)
+    輪替的好處：每個 refresh token 只能用一次。若已作廢的 token 又被拿來用，
+    代表有人複製了它（使用者或攻擊者其中一方拿的是舊的），這時撤銷此人全部權杖、要求重新登入。
     """
-    raise NotImplementedError("services.auth.refresh 尚未實作")
+    now = _now()
+    token = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == security.hash_token(raw_refresh_token)))
+    if token is None:
+        raise unauthorized()
+    user = db.get(User, token.user_id)
+
+    if token.revoked_at is not None:
+        user_service.revoke_all_tokens(db, token.user_id)
+        audit.record(db, user=user, action="token.reuse_detected")
+        db.commit()
+        raise unauthorized()
+    if token.expires_at <= now or user is None or not user.is_active:
+        raise unauthorized()
+    if _is_idle(user, now):
+        token.revoked_at = now
+        audit.record(db, user=user, action="logout.idle")
+        db.commit()
+        raise _idle_timeout()
+
+    token.revoked_at = now
+    user.last_active_at = now
+    access, raw_new = _issue_tokens(db, user)
+    db.commit()
+    return access, raw_new
 
 
-def revoke(db: Session, *, user: User, raw_refresh_token: str) -> None:
-    """TODO：登出／閒置。把這個 refresh token 標記為已撤銷。
-
-    1. 以雜湊找 RefreshToken，且 user_id 必須是這位使用者
-    2. 找到且尚未撤銷 → revoked_at = now；找不到就當作已完成（冪等）
-    3. audit.record(db, user=user, action="logout")
-    """
-    raise NotImplementedError("services.auth.revoke 尚未實作")
+def revoke(db: Session, *, user: User, raw_refresh_token: str, ip: str | None = None) -> None:
+    """登出：把這個 refresh token 標記為已撤銷。找不到或已撤銷就當作完成（冪等）。"""
+    token = db.scalar(select(RefreshToken).where(
+        RefreshToken.token_hash == security.hash_token(raw_refresh_token),
+        RefreshToken.user_id == user.id))
+    if token is not None and token.revoked_at is None:
+        token.revoked_at = _now()
+    audit.record(db, user=user, action="logout", ip=ip)
+    db.commit()
 
 
 def get_user_from_access_token(db: Session, token: str) -> User:
-    """TODO：每個受保護的請求都會經過這裡（deps.get_current_user）。
+    """每個受保護的請求都會經過這裡。
 
-    1. security.decode_access_token(token)；過期或無效 → raise unauthorized()
-    2. 由 payload["sub"] 取得使用者；不存在或 is_active=False → raise unauthorized()
-    3. 更新 user.last_active_at = now（閒置判斷的依據），commit
-       （每個請求都寫一次資料庫，量大時怎麼改善？）
-    4. 回傳 user
+    權限以資料庫為準（JWT 只用來識別是誰），所以停用帳號、修改角色會立刻生效。
     """
-    raise NotImplementedError("services.auth.get_user_from_access_token 尚未實作")
+    payload = security.decode_access_token(token)
+    if payload is None:
+        raise unauthorized()
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, ValueError):
+        raise unauthorized() from None
+    user = db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise unauthorized()
+
+    now = _now()
+    if _is_idle(user, now):
+        raise _idle_timeout()
+    if user.last_active_at is None or now - user.last_active_at > ACTIVITY_WRITE_INTERVAL:
+        user.last_active_at = now
+        db.commit()
+    return user

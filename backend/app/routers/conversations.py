@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, rate_limit_ask
 from app.models import User
 from app.schemas import (ConversationCreate, ConversationOut, FeedbackIn, MessageCreate, MessageOut, Page)
 from app.services import conversation as conversation_service
@@ -43,9 +43,9 @@ def list_messages(conversation_id: uuid.UUID, user: User = Depends(get_current_u
 
 
 @router.post("/conversations/{conversation_id}/messages", response_model=MessageOut, status_code=201)
-def ask(conversation_id: uuid.UUID, body: MessageCreate, user: User = Depends(get_current_user),
+def ask(conversation_id: uuid.UUID, body: MessageCreate, user: User = Depends(rate_limit_ask),
         db: Session = Depends(get_db)):
-    """提問：在對話下新增一則訊息，回傳 AI 回覆（含出處、耗時）。"""
+    """提問：在對話下新增一則訊息，回傳 AI 回覆（含出處、耗時）。每位使用者有提問頻率上限。"""
     return rag_service.answer_question(db, user=user, conversation_id=conversation_id, content=body.content)
 
 
