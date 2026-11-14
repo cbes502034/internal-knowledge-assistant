@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     login_max_failures: int = 5          # 連續失敗幾次就鎖定
     login_lock_min: int = 15             # 鎖定幾分鐘
     cookie_secure: bool = False          # 正式環境（HTTPS）設為 true
+    # 自助註冊時部門是使用者自己選的，等於自己決定能看哪個部門的文件；
+    # 正式環境請關閉，改由 IT 建立帳號或由 AD 同步。
+    allow_registration: bool = True
 
     # 模型
     ollama_url: str = "http://127.0.0.1:11434"

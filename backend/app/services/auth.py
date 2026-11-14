@@ -16,6 +16,10 @@ from app.services import user as user_service
 # 閒置判斷的誤差最多就是這麼久，換來大幅減少寫入。
 ACTIVITY_WRITE_INTERVAL = timedelta(seconds=60)
 
+# 同一個瀏覽器開兩個分頁時，兩邊可能幾乎同時拿同一個 refresh token 來換。
+# 剛被輪替（這段時間內）的舊 token 再出現，視為併發而不是外洩：只回 401，前端稍等再用新 cookie 重試。
+REUSE_GRACE = timedelta(seconds=10)
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -44,6 +48,8 @@ def _issue_tokens(db: Session, user: User) -> tuple[str, str]:
 
 def register_user(db: Session, *, email: str, password: str, dept_code: str) -> User:
     """註冊一般員工。角色一律是 employee，主管與 IT 由 IT 管理員調整。"""
+    if not get_settings().allow_registration:
+        raise AppError(403, "registration_disabled", "目前不開放自行註冊，請聯絡資訊單位")
     department = user_service.require_department(db, dept_code)
     email = _normalize_email(email)
     if db.scalar(select(User.id).where(User.email == email)) is not None:
@@ -110,12 +116,18 @@ def refresh(db: Session, *, raw_refresh_token: str) -> tuple[str, str]:
     代表有人複製了它（使用者或攻擊者其中一方拿的是舊的），這時撤銷此人全部權杖、要求重新登入。
     """
     now = _now()
-    token = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == security.hash_token(raw_refresh_token)))
+    # FOR UPDATE：兩個請求同時帶同一個 token 時，第二個要等第一個輪替完才讀得到，不會各自換出一個新 token
+    token = db.scalar(select(RefreshToken)
+                      .where(RefreshToken.token_hash == security.hash_token(raw_refresh_token))
+                      .with_for_update())
     if token is None:
         raise unauthorized()
     user = db.get(User, token.user_id)
 
     if token.revoked_at is not None:
+        if now - token.revoked_at <= REUSE_GRACE:
+            db.rollback()
+            raise AppError(401, "refresh_superseded", "請重試", {"WWW-Authenticate": "Bearer"})
         user_service.revoke_all_tokens(db, token.user_id)
         audit.record(db, user=user, action="token.reuse_detected")
         db.commit()

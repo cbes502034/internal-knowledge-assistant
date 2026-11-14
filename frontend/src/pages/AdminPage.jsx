@@ -213,21 +213,21 @@ function EvalTab() {
   const load = useCallback(() => api.listEvalRuns()
     .then((p) => {
       setRuns(p.items);
-      setSelected((current) => current ?? p.items.find((r) => r.finished_at)?.id ?? null);
+      setSelected((current) => current ?? p.items.find((r) => r.metrics)?.id ?? null);
     })
     .catch((e) => setError(e.message)), []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    if (!runs.some((r) => !r.finished_at)) return undefined;
+    if (!runs.some((r) => !r.finished_at && !r.error)) return undefined;
     const timer = setTimeout(load, 2000);
     return () => clearTimeout(timer);
   }, [runs, load]);
 
   const run = runs.find((r) => r.id === selected);
   useEffect(() => {
-    if (!run?.finished_at) { setResults([]); return; }
+    if (!run?.metrics) { setResults([]); return; }
     api.listEvalResults(run.id, failedOnly).then(setResults).catch((e) => setError(e.message));
-  }, [run?.id, run?.finished_at, failedOnly]);
+  }, [run?.id, Boolean(run?.metrics), failedOnly]);
 
   async function start() {
     setError('');
@@ -252,7 +252,8 @@ function EvalTab() {
       </div>
       {error && <p className="error" role="alert">{error}</p>}
 
-      {run && !run.finished_at && <p className="muted">批次 #{run.id} 執行中…</p>}
+      {run?.error && <p className="error" role="alert">批次 #{run.id} 沒有完成：{run.error}</p>}
+      {run && !run.finished_at && !run.error && <p className="muted">批次 #{run.id} 執行中…</p>}
       {m && (
         <div className="cards">
           <Metric label="Hit@1" value={pct(m.hit_at_1)} />
@@ -282,14 +283,14 @@ function EvalTab() {
                     <td>{pct(r.metrics.refuse_accuracy)}</td><td>{pct(r.metrics.permission_pass)}</td>
                     <td>{r.metrics.p95_ms} ms</td>
                   </>
-                ) : <td colSpan={5}>執行中…</td>}
+                ) : <td colSpan={5}>{r.error ?? '執行中…'}</td>}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {run?.finished_at && (
+      {run?.metrics && (
         <>
           <h2 className="section">
             {failedOnly ? '失敗案例' : '全部題目'}（批次 #{run.id}）

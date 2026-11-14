@@ -18,7 +18,7 @@ def create_run(body: EvalRunCreate, background: BackgroundTasks, _: User = Depen
                                   keyword_weight=body.keyword_weight)
     background.add_task(eval_service.execute_run, run.id)
     return {"id": run.id, "embed_model": run.embed_model, "config": run.config,
-            "started_at": run.started_at, "finished_at": None, "metrics": None}
+            "started_at": run.started_at, "finished_at": None, "error": None, "metrics": None}
 
 
 @router.get("", response_model=Page[EvalRunOut])

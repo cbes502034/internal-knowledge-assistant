@@ -4,6 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.deps import require_it_admin
 from app.models import User
@@ -40,8 +41,9 @@ def upload_document(
     db: Session = Depends(get_db),
 ):
     """上傳文件（202：已受理），切塊與向量化在背景執行。"""
+    limit = get_settings().max_upload_mb * 1024 * 1024
     document = document_service.upload(
-        db, actor=admin, filename=file.filename or "", data=file.file.read(), title=title, dept_code=dept_code,
+        db, actor=admin, filename=file.filename or "", data=file.file.read(limit + 1), title=title, dept_code=dept_code,
         level=level, version=version, effective_date=effective_date, source=source)
     background.add_task(document_service.process_in_background, document.id)
     return document

@@ -52,7 +52,11 @@ def test_refresh_rotates_token_and_detects_reuse(client):
     new = client.cookies.get("refresh_token")
     assert new and new != old
 
-    # 有人拿舊的（已輪替作廢的）token 來換：視為外洩，撤銷此人全部 token
+    # 輪替已經過了一段時間（超過併發的寬限期），才有人拿舊的 token 來換：視為外洩，撤銷此人全部 token
+    with SessionLocal() as db:
+        db.execute(update(RefreshToken).where(RefreshToken.revoked_at.is_not(None))
+                   .values(revoked_at=datetime.now(timezone.utc) - timedelta(minutes=1)))
+        db.commit()
     attacker = TestClient(create_app())
     stolen = attacker.post("/api/v1/auth/token", data=REFRESH, headers={"Cookie": f"refresh_token={old}"})
     assert stolen.status_code == 401

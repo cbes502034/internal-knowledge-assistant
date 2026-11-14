@@ -152,6 +152,7 @@ class EvalRunOut(BaseModel):
     config: dict | None
     started_at: datetime
     finished_at: datetime | None
+    error: str | None = None         # 失敗或中斷的原因；有值就不會再有結果
     metrics: EvalMetrics | None = None
 
 

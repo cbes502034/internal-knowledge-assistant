@@ -4,7 +4,8 @@
 """
 import math
 import time
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from sqlalchemy import func, select
@@ -12,10 +13,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core import retriever
-from app.core.llm_service import get_llm
+from app.core.llm_service import LLMUnavailableError, get_llm
 from app.db import SessionLocal
 from app.errors import not_found
 from app.models import Department, Document, EvalCase, EvalResult, EvalRun
+
+logger = logging.getLogger(__name__)
 
 EVAL_K = 5     # 每題取前幾名來找正確段落
 
@@ -88,7 +91,25 @@ def create_run(db: Session, *, mode: str | None = None, top_k: int | None = None
     return run
 
 
+STALE_AFTER = timedelta(minutes=10)     # 超過這麼久還沒完成，視為中斷（例如服務重啟）
+
+
 def execute_run(run_id: int) -> None:
+    """執行評測；失敗時把原因記在批次上並標記結束，畫面才不會永遠顯示「執行中」。"""
+    try:
+        _execute_run(run_id)
+    except Exception as exc:
+        logger.exception("eval run failed: run_id=%s", run_id)
+        reason = "AI 服務無法使用" if isinstance(exc, LLMUnavailableError) else "評測執行失敗"
+        with SessionLocal() as db:
+            run = db.get(EvalRun, run_id)
+            if run is not None:
+                run.config = {**(run.config or {}), "error": reason}   # 指派新 dict，JSONB 才會被寫回
+                run.finished_at = datetime.now(timezone.utc)
+                db.commit()
+
+
+def _execute_run(run_id: int) -> None:
     """逐題檢索並寫入結果（背景工作，自己開連線）。"""
     with SessionLocal() as db:
         run = db.get(EvalRun, run_id)
@@ -159,12 +180,16 @@ def list_runs(db: Session, *, limit: int, offset: int) -> tuple[list[dict], int]
     total = db.scalar(select(func.count(EvalRun.id)))
     runs = db.scalars(select(EvalRun).order_by(EvalRun.id.desc()).limit(limit).offset(offset))
     items = []
+    now = datetime.now(timezone.utc)
     for run in runs:
-        results = _result_dicts(db, run.id)
+        error = (run.config or {}).get("error")
+        if error is None and run.finished_at is None and now - run.started_at > STALE_AFTER:
+            error = "執行中斷"
+        done = run.finished_at is not None and error is None
         items.append({
             "id": run.id, "embed_model": run.embed_model, "config": run.config,
-            "started_at": run.started_at, "finished_at": run.finished_at,
-            "metrics": compute_metrics(results) if run.finished_at else None,
+            "started_at": run.started_at, "finished_at": run.finished_at, "error": error,
+            "metrics": compute_metrics(_result_dicts(db, run.id)) if done else None,
         })
     return items, total
 

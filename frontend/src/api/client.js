@@ -55,7 +55,12 @@ async function request(method, path, { json, form, multipart, auth = true, retry
 // 後端每個 refresh token 只能用一次（輪替），重複送出會被當成權杖外洩而撤銷全部登入。
 let refreshing = null;
 function refreshOnce() {
-  refreshing ??= request('POST', '/auth/token', { form: { grant_type: 'refresh_token' }, auth: false })
+  const exchange = () => request('POST', '/auth/token', { form: { grant_type: 'refresh_token' }, auth: false });
+  // 另一個分頁剛好先換走了（後端回 refresh_superseded）：等一下，改用它寫回 cookie 的新 token 再試一次
+  refreshing ??= exchange()
+    .catch((e) => (e.code === 'refresh_superseded'
+      ? new Promise((resolve) => { setTimeout(resolve, 500); }).then(exchange)
+      : Promise.reject(e)))
     .then((t) => setAccessToken(t.access_token))
     .finally(() => { refreshing = null; });
   return refreshing;
