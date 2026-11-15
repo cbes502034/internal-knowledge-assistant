@@ -1,17 +1,19 @@
 """
-稽核紀錄：每個重要動作寫一筆「誰、何時、從哪、做了什麼、對象」。
+【檔案用途】稽核紀錄：每個重要動作寫一筆「誰、何時、從哪、做了什麼、對象」。
 對應職缺：資訊安全、內部系統的可追溯性。
 
 只記事件本身，不記問題內容、密碼、文件本文：日誌通常比資料庫更多人看得到，
 放進機密內容就等於多開一個外洩的口。
+
+被誰呼叫：routers 的登入、登出、註冊、提問、文件上傳／修改／重新處理、使用者修改。
 """
 
-import ipaddress
+import ipaddress  # 驗證字串是不是合法的 IP（IPv4 或 IPv6）
 
-from fastapi import Request
-from sqlalchemy.orm import Session
+from fastapi import Request  # 型別註記：HTTP 請求物件，從它取來源 IP
+from sqlalchemy.orm import Session  # 型別註記：資料庫工作階段
 
-from app.models.audit import AuditLog
+from app.models.audit import AuditLog  # audit_logs 資料表
 
 
 def client_ip(request: Request) -> str | None:
@@ -19,8 +21,10 @@ def client_ip(request: Request) -> str | None:
     取來源 IP。只取直接連進來的那一端，不信任 X-Forwarded-For 標頭：
     那個標頭任何人都能自己填，前面沒有可信任的反向代理時，拿它當 IP 等於讓攻擊者自己決定紀錄內容。
     """
+    # request.client 是 (host, port)；某些情況（例如測試工具）可能是 None
     host = request.client.host if request.client else None
     try:
+        # ip_address 會驗證格式；str() 轉回標準寫法
         return str(ipaddress.ip_address(host)) if host else None
     except ValueError:  # 例如測試工具的 "testclient"，不是合法 IP 就不記
         return None
@@ -30,7 +34,7 @@ def log_event(
     db: Session,
     request: Request,
     action: str,
-    *,
+    *,  # 之後的參數必須用名稱傳入，例如 log_event(db, request, "ask", user_id=3)
     user_id: int | None = None,
     target: str | None = None,
 ) -> None:
@@ -39,7 +43,7 @@ def log_event(
         AuditLog(
             user_id=user_id,
             action=action,
-            target=target[:100] if target else None,  # 欄位上限 100 字
+            target=target[:100] if target else None,  # 欄位上限 100 字，超過就截斷，不讓寫入失敗
             ip=client_ip(request),
         )
     )

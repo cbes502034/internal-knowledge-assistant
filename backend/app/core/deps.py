@@ -1,19 +1,24 @@
 """
-驗證守門員：把「請求帶來的 token」換成「資料庫裡真正的 User 物件」，並提供角色檢查。
+【檔案用途】驗證守門員：把「請求帶來的 token」換成「資料庫裡真正的 User 物件」，並提供角色檢查。
 對應職缺：OAuth 2.0 / JWT 驗證、各部門權限控管（RBAC）。
 
-其他路由只要宣告 Depends(get_current_user)，就能直接拿到已驗證的使用者。
+其他路由只要宣告 Depends(get_current_user)，就能直接拿到已驗證的使用者：
+  get_current_user()     任何登入者都能過
+  require_role(角色...)  只有指定角色能過（回傳一個 dependency）
+
+請求進來的順序：oauth2_scheme 取 token → get_current_user 驗證 → require_role 檢查角色 → 路由函式
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone  # 更新 last_active_at 用（UTC 時間）
 
 import jwt  # PyJWT：解碼並驗證 JWT 的簽名與有效期
-from fastapi import Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException, status  # 依賴注入、丟錯誤、狀態碼常數
+from sqlalchemy.orm import Session  # 型別註記：資料庫工作階段
 
-from app.core.database import get_db
+from app.core.database import get_db  # 依賴：資料庫 session
+# oauth2_scheme：從 Authorization: Bearer <token> 標頭取出 token；decodeAccessToken：驗證並解開 JWT（你寫的）
 from app.core.security import oauth2_scheme, decodeAccessToken
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole  # 使用者表與角色列舉
 
 
 def get_current_user(
@@ -43,11 +48,16 @@ def get_current_user(
 
 
 def require_role(*allowed_roles: UserRole):
-    """產生「只允許指定角色通過」的 dependency，例如 Depends(require_role(UserRole.IT_ADMIN))。"""
+    """
+    產生「只允許指定角色通過」的 dependency，例如 Depends(require_role(UserRole.IT_ADMIN))。
+    這種「回傳函式的函式」叫 dependency factory：角色清單在外層傳入，內層 checker 才是 FastAPI 真正呼叫的依賴。
+    """
 
     def checker(user: User = Depends(get_current_user)) -> User:
+        """先經過 get_current_user（沒登入就 401），再檢查角色（角色不符就 403）。"""
+        # allowed_roles 是列舉，user.role 是字串，所以比對前先取出列舉的 .value
         if user.role not in [r.value for r in allowed_roles]:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "權限不足")
         return user
 
-    return checker
+    return checker  # 回傳的是函式本身（不是呼叫結果），交給 Depends 使用
