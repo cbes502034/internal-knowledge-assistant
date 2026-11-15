@@ -149,7 +149,7 @@ async function createConversation() {
   state.conversations.unshift(c); await selectConversation(c.id); renderConversationList();
 }
 async function selectConversation(id) {
-  state.conversationId=id; renderConversationList();
+  showChat(); state.conversationId=id; renderConversationList();
   state.messages=DEMO_MODE?(id==="demo-1"?[{
     id:700,role:"user",content:"廢溶劑暫存期限與處理流程是什麼？",created_at:new Date(Date.now()-120000).toISOString()
   },{
@@ -278,7 +278,7 @@ async function renderEvaluation(root) {
 }
 function bindLayout() {
   $("#authForm").addEventListener("submit",handleAuth);$("#authSwitch").addEventListener("click",toggleAuthMode);
-  $("#chatForm").addEventListener("submit",handleAsk);$("#newConversation").addEventListener("click",createConversation);
+  $("#chatForm").addEventListener("submit",handleAsk);$("#newConversation").addEventListener("click",createConversation);$("#chatNav").addEventListener("click",showChat);
   $("#logoutButton").addEventListener("click",()=>doLogout());$("#topLogout").addEventListener("click",()=>doLogout());
   $("#menuButton").addEventListener("click",()=>{$("#sidebar").classList.add("open");$("#mobileScrim").classList.add("show");});
   $("#mobileScrim").addEventListener("click",()=>{$("#sidebar").classList.remove("open");$("#mobileScrim").classList.remove("show");});
