@@ -16,8 +16,14 @@ REFUSE_TEXT = "根據目前可查閱的文件，找不到足以回答這個問�
 # 模型服務連不上時的回答
 LLM_DOWN_TEXT = "AI 服務暫時無法使用，請稍後再試。"
 
+# 第二版 prompt：第一版只寫「資料中沒有的內容一律回答找不到依據」，評測發現 3B 小模型會過度拒答——
+# 條文明明有答案，但問題用詞不同（簡稱、口語）或是問「可不可以」，模型就說找不到依據。
+# 所以補上「用詞不同但意思相同也算有依據」與「是非題依條文的允許或禁止回答」兩句。
 PROMPT_TEMPLATE = """你是公司內部規章與 SOP 的問答助理。
-只能根據下方【參考資料】回答，資料中沒有的內容一律回答「找不到依據」，不要自行推測。
+只能根據下方【參考資料】回答，不要自行推測，也不要加入資料以外的知識。
+問題的用詞可能和條文不同（例如簡稱或口語說法），只要意思相同，就應依據該條文回答。
+問題若是「可不可以」這類是非題，請依條文中允許或禁止的規定直接回答。
+只有參考資料中完全沒有相關規定時，才回答「找不到依據」。
 回答時請標註引用的文件名稱與條號。
 
 【參考資料】
@@ -30,9 +36,11 @@ PROMPT_TEMPLATE = """你是公司內部規章與 SOP 的問答助理。
 TOP_K = 5  # 最後交給模型看幾筆
 MAX_CONTEXT_CHARS = 3000  # 參考資料的字數上限，避免超過模型能吃的長度
 # 拒答門檻：最相近的那筆向量相似度低於它就拒答。
-# 數值來源（bge-m3、6 題評測）：該拒答的題目最高 0.49、可回答的題目最低 0.66，取缺口中間值。
-# 題數很少，只能當起點；題庫變多或換嵌入模型都要重新量。
-MIN_SIMILARITY = 0.57
+# 數值來源（bge-m3，backend/data/eval_cases.json 的 26 題，scripts/run_eval.py 量出）：
+#   應回答的 18 題最低 0.645；應拒答的 8 題（題庫外＋越權）最高 0.608 → 取缺口中間 0.62。
+#   原本用 6 題量的 0.57 太低：有 2 題該拒答卻放行（所幸模型依 prompt 回答「找不到依據」）。
+# 注意：門檻是用同一份題庫調的，數字偏樂觀；題庫變多或換嵌入模型都要重新量。
+MIN_SIMILARITY = 0.62
 
 
 def fit_hits(hits: list[Hit], max_chars: int = MAX_CONTEXT_CHARS) -> list[Hit]:
@@ -61,6 +69,24 @@ def build_context(hits: list[Hit]) -> str:
     return "\n\n".join(blocks)
 
 
+def should_refuse(hits: list[Hit]) -> bool:
+    """
+    拒答判斷：沒有任何 hit，或最相近那筆的向量相似度低於門檻，就拒答。
+    問答（answer_question）與評測（services/evaluation.py）共用這一個函式，規則只有一份。
+
+    判斷用「向量相似度」而不是 RRF 分數：RRF 只看名次，再不相關的問題也會有名次、也會有分數，
+    沒辦法回答「到底夠不夠像」；餘弦相似度才是有絕對意義的數字。
+    """
+    best_similarity = max((hit.similarity for hit in hits if hit.similarity is not None), default=0.0)
+    return not hits or best_similarity < MIN_SIMILARITY
+
+
+def build_prompt(question: str, hits: list[Hit]) -> tuple[str, list[Hit]]:
+    """組出給模型的 prompt；回傳 (prompt, 實際放進 prompt 的 hits)。問答與評測共用。"""
+    used_hits = fit_hits(hits)
+    return PROMPT_TEMPLATE.format(context=build_context(used_hits), question=question), used_hits
+
+
 def answer_question(db: Session, user: User, question: str, llm: LLMService | None = None) -> dict:
     """完整問答流程；回傳 {'answer': 回答文字, 'citations': 引用的 Hit 清單}。"""
     # llm 參數讓測試可以換成假的模型；平常不傳，就依設定檔建立
@@ -79,15 +105,12 @@ def answer_question(db: Session, user: User, question: str, llm: LLMService | No
         hits = hybrid_search(db, question, query_embedding, user, k=TOP_K)
 
         # TODO 3. 拒答判斷：hits 為空或最高分低於門檻，直接回傳 REFUSE_TEXT（門檻怎麼定？用評測資料去量，不要憑感覺）
-        # 判斷用「向量相似度」而不是 RRF 分數：RRF 只看名次，再不相關的問題也會有名次、也會有分數，
-        # 沒辦法回答「到底夠不夠像」；餘弦相似度才是有絕對意義的數字
-        best_similarity = max((hit.similarity for hit in hits if hit.similarity is not None), default=0.0)
-        if not hits or best_similarity < MIN_SIMILARITY:
+        # 規則寫在 should_refuse（評測也用同一個函式）
+        if should_refuse(hits):
             return {"answer": REFUSE_TEXT, "citations": []}
 
         # TODO 4. build_context + PROMPT_TEMPLATE 組出 prompt，呼叫 LLMService.generate
-        used_hits = fit_hits(hits)
-        prompt = PROMPT_TEMPLATE.format(context=build_context(used_hits), question=question)
+        prompt, used_hits = build_prompt(question, hits)
         answer = llm.generate(prompt)
 
     except LLMUnavailableError:

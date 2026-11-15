@@ -1,0 +1,9 @@
+[
+  {"file": "廢棄物處理作業程序.txt", "title": "廢棄物處理作業程序", "dept_code": "ops", "level": "public", "version": "v1"},
+  {"file": "資訊安全管理辦法.txt", "title": "資訊安全管理辦法", "dept_code": "gm_office", "level": "public", "version": "v1"},
+  {"file": "請假管理辦法.txt", "title": "請假管理辦法", "dept_code": "gm_office", "level": "public", "version": "v1"},
+  {"file": "業務差旅辦法.txt", "title": "業務差旅辦法", "dept_code": "sales", "level": "dept", "version": "v1"},
+  {"file": "原始碼管理規範.txt", "title": "原始碼管理規範", "dept_code": "rd", "level": "dept", "version": "v1"},
+  {"file": "採購作業辦法.txt", "title": "採購作業辦法", "dept_code": "finance", "level": "dept", "version": "v1"},
+  {"file": "資安事件通報程序.txt", "title": "資安事件通報程序", "dept_code": "gm_office", "level": "restricted", "version": "v1"}
+]

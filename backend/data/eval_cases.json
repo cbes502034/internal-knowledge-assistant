@@ -1,0 +1,30 @@
+[
+  {"question": "廢溶劑可以在廠內暫存多久？", "kind": "answer", "expected_doc_title": "廢棄物處理作業程序", "expected_article_no": "第3條", "as_dept": "ops"},
+  {"question": "廢溶劑的容器上要標示哪些資訊？", "kind": "answer", "expected_doc_title": "廢棄物處理作業程序", "expected_article_no": "第2條", "as_dept": "sales"},
+  {"question": "廢棄物暫存區多久要巡檢一次？", "kind": "answer", "expected_doc_title": "廢棄物處理作業程序", "expected_article_no": "第4條", "as_dept": "ops"},
+  {"question": "清運廢棄物時要確認什麼文件？", "kind": "answer", "expected_doc_title": "廢棄物處理作業程序", "expected_article_no": "第5條", "as_dept": "ops"},
+  {"question": "系統登入密碼有什麼規定？", "kind": "answer", "expected_doc_title": "資訊安全管理辦法", "expected_article_no": "第2條", "as_dept": "rd"},
+  {"question": "電腦閒置多久會自動鎖定？", "kind": "answer", "expected_doc_title": "資訊安全管理辦法", "expected_article_no": "第3條", "as_dept": "sales"},
+  {"question": "可以把公司資料丟到外部的生成式 AI 服務嗎？", "kind": "answer", "expected_doc_title": "資訊安全管理辦法", "expected_article_no": "第5條", "as_dept": "product"},
+  {"question": "我可以自己在公司電腦安裝軟體嗎？", "kind": "answer", "expected_doc_title": "資訊安全管理辦法", "expected_article_no": "第4條", "as_dept": "finance"},
+  {"question": "請假要怎麼申請？", "kind": "answer", "expected_doc_title": "請假管理辦法", "expected_article_no": "第1條", "as_dept": "ops"},
+  {"question": "突然生病來不及事先請假怎麼辦？", "kind": "answer", "expected_doc_title": "請假管理辦法", "expected_article_no": "第2條", "as_dept": "rd"},
+  {"question": "病假請幾天以上需要附證明？", "kind": "answer", "expected_doc_title": "請假管理辦法", "expected_article_no": "第3條", "as_dept": "sales"},
+  {"question": "特休可以只請半天嗎？", "kind": "answer", "expected_doc_title": "請假管理辦法", "expected_article_no": "第4條", "as_dept": "product"},
+  {"question": "國內出差住宿費每晚上限是多少？", "kind": "answer", "expected_doc_title": "業務差旅辦法", "expected_article_no": "第3條", "as_dept": "sales"},
+  {"question": "出差費用要在幾天內核銷？", "kind": "answer", "expected_doc_title": "業務差旅辦法", "expected_article_no": "第5條", "as_dept": "sales"},
+  {"question": "程式碼合併到主要分支前需要做什麼？", "kind": "answer", "expected_doc_title": "原始碼管理規範", "expected_article_no": "第2條", "as_dept": "rd"},
+  {"question": "程式碼裡可以直接寫密碼或金鑰嗎？", "kind": "answer", "expected_doc_title": "原始碼管理規範", "expected_article_no": "第3條", "as_dept": "rd"},
+  {"question": "採購金額超過多少需要找三家比價？", "kind": "answer", "expected_doc_title": "採購作業辦法", "expected_article_no": "第2條", "as_dept": "finance"},
+  {"question": "發現資安事件要在多久內通報？", "kind": "answer", "expected_doc_title": "資安事件通報程序", "expected_article_no": "第2條", "as_dept": "gm_office", "as_role": "it_admin"},
+
+  {"question": "國內出差住宿費每晚上限是多少？", "kind": "permission", "as_dept": "rd"},
+  {"question": "程式碼合併到主要分支前需要做什麼？", "kind": "permission", "as_dept": "sales"},
+  {"question": "採購金額超過多少需要找三家比價？", "kind": "permission", "as_dept": "ops"},
+  {"question": "發現資安事件要在多久內通報？", "kind": "permission", "as_dept": "ops"},
+
+  {"question": "員工旅遊補助怎麼申請？", "kind": "refuse", "as_dept": "ops"},
+  {"question": "公司尾牙在哪一天舉辦？", "kind": "refuse", "as_dept": "sales"},
+  {"question": "公司停車位要怎麼申請？", "kind": "refuse", "as_dept": "rd"},
+  {"question": "年終獎金怎麼計算？", "kind": "refuse", "as_dept": "finance"}
+]

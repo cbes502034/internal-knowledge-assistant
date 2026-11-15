@@ -181,8 +181,13 @@ def test_answer_question_happy_path(db, world):
 
 
 def test_answer_question_never_shows_unauthorised_content_to_the_model(db, world):
-    llm = FakeLLM(vec(0, 3, 4))  # 向量同時貼近 c1、c4（研發機密）、c5（資安受限）
+    # 向量同時貼近 c1、c4（研發機密）、c5（資安受限）。c1 的權重放大到 2：
+    # 與 c1 的相似度 2/√6 ≈ 0.82 高於拒答門檻，才會真的走到「組 prompt」這一步，測試才有意義
+    query = vec(0, 3, 4)
+    query[0] = 2.0
+    llm = FakeLLM(query)
     answer_question(db, world.users.sales, "研發原始碼 資安事件 廢溶劑", llm)
+    assert llm.prompts, "沒有走到生成：測試向量的相似度要高於拒答門檻"
     prompt = llm.prompts[0]
     assert "研發原始碼不得外流" not in prompt
     assert "資安事件須於一小時內通報" not in prompt

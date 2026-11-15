@@ -26,16 +26,18 @@ from sqlalchemy.orm import Session  # 型別註記
 from sqlalchemy import text  # 寫原生 SQL（SELECT NOW()）
 
 # 各功能的路由模組，每個模組裡都有一個 router
-from app.routers import audit, auth, conversations, departments, documents, users
+from app.routers import audit, auth, conversations, departments, documents, evaluation, users
+from app.services.evaluation import mark_interrupted_runs  # 啟動時清理卡在 running 的評測批次
 from app.services.ingestion import mark_interrupted_as_failed  # 啟動時清理卡在 pending 的文件
 
 
 # ── 生命週期：yield 之前的程式在伺服器啟動時跑一次，yield 之後的在關閉時跑 ──
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """伺服器啟動時執行一次：上次關機時還在處理的文件標成 failed，管理員才能重新處理。"""
+    """伺服器啟動時執行一次：上次關機時還在跑的背景工作不會再繼續，標成 failed，管理員才能重跑。"""
     with SessionLocal() as db:
         mark_interrupted_as_failed(db)
+        mark_interrupted_runs(db)
     yield
 
 
@@ -64,6 +66,7 @@ app.include_router(departments.router)  # /api/v1/departments  部門清單
 app.include_router(documents.router)  # /api/v1/documents    文件管理（IT 管理員）
 app.include_router(conversations.router)  # /api/v1/conversations、/messages  對話與問答
 app.include_router(audit.router)  # /api/v1/audit-logs   稽核紀錄（IT 管理員）
+app.include_router(evaluation.router)  # /api/v1/eval-runs    RAG 評測（IT 管理員）
 
 
 # ── 以下是你原本寫的測試端點：確認伺服器與資料庫連線是否正常 ──
