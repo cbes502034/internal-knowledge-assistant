@@ -154,8 +154,8 @@ async function selectConversation(id) {
     id:700,role:"user",content:"廢溶劑暫存期限與處理流程是什麼？",created_at:new Date(Date.now()-120000).toISOString()
   },{
     id:701,role:"assistant",content:"依展示資料，廢溶劑應依廢棄物分類與暫存規範管理，並在達到規定期限前聯繫合格清運業者。實際期限與處理方式應以現行核准文件及適用法規為準。",refused:false,latency_ms:3180,feedback:null,created_at:new Date(Date.now()-110000).toISOString(),
-    citations:[{rank:1,doc_title:"廢棄物處理 SOP",version:"v2.1",article_no:2,score:.82,preview:"本段為展示資料，並非正式法規原文。請以公司核准版本及主管機關公告為準。"},{rank:2,doc_title:"職業安全衛生管理辦法",version:"2025 修訂版",article_no:8,score:.74,preview:"本段為展示資料，僅用於介面預覽。"}]
-  }]:[];
+    citations:[{rank:1,doc_title:"廢棄物處理 SOP",version:"v2.1",article_no:"第2條",score:.82,preview:"本段為展示資料，並非正式法規原文。請以公司核准版本及主管機關公告為準。"},{rank:2,doc_title:"職業安全衛生管理辦法",version:"2025 修訂版",article_no:"第8條",score:.74,preview:"本段為展示資料，僅用於介面預覽。"}]
+  }]:[]):[];
   if(!DEMO_MODE) state.messages=await api.get(`/conversations/${id}/messages`);
   renderMessages();
 }
@@ -169,9 +169,9 @@ function renderMessages() {
 function renderMessage(m) {
   const user=m.role==="user";
   const citations=!user&&m.citations?.length?`<div class="citation-list">${m.citations.map((c,i)=>`<div class="citation-card">
-    <div class="citation-head"><div><div class="citation-title">${escapeHtml(c.doc_title)}</div><div class="citation-meta">版本 ${escapeHtml(c.version||"未提供")} · 第 ${escapeHtml(c.article_no)} 條 · 排名 ${escapeHtml(c.rank)}</div></div><span class="citation-score">${c.score==null?"相似度未提供":`相似度 ${(c.score*100).toFixed(0)}%`}</span></div>
+    <div class="citation-head"><div><div class="citation-title">${escapeHtml(c.doc_title)}</div><div class="citation-meta">版本 ${escapeHtml(c.version||"未提供")} · ${escapeHtml(c.article_no||"未標條號")} · 排名 ${escapeHtml(c.rank)}</div></div><span class="citation-score">${c.score==null?"相似度未提供":`相似度 ${(c.score*100).toFixed(0)}%`}</span></div>
     <button class="citation-expand" data-citation="${m.id}-${i}">展開原文／出處資訊　＋</button>
-    <div class="citation-detail" id="citation-${m.id}-${i}" hidden>${DEMO_MODE?escapeHtml(c.preview||"展示內容"): "目前後端 CitationOut 僅回傳文件名稱、版本、條號與分數，尚未提供原文內容。要實現原文展開，後端需增加授權後的段落內容欄位或段落明細端點。"} </div>
+    <div class="citation-detail" id="citation-${m.id}-${i}" hidden>${c.preview?escapeHtml(c.preview):(DEMO_MODE?"展示內容":"原文目前無法顯示（文件已作廢、已刪除，或你已沒有閱讀權限）。")}</div>
   </div>`).join("")}</div>`:"";
   const feedback=!user&&m.id?`<div class="message-actions"><span>${m.latency_ms!=null?`回應時間 ${(m.latency_ms/1000).toFixed(2)} 秒`:""}</span><span>這個回答有幫助嗎？</span><button class="feedback-button ${m.feedback==="up"?"selected":""}" data-feedback="up" data-id="${m.id}">有用</button><button class="feedback-button ${m.feedback==="down"?"selected":""}" data-feedback="down" data-id="${m.id}">沒用</button></div>`:"";
   return `<article class="message-row ${user?"user":"assistant"}"><div class="message-avatar">${user?"U":"K"}</div><div class="message-body"><div class="message-meta">${user?"你":"知識助理"} · ${formatDate(m.created_at)}</div><div class="message-bubble">${escapeHtml(m.content)}</div>${m.refused?'<div class="message-actions"><span class="message-status">未找到足夠依據</span></div>':""}${citations}${feedback}</div></article>`;
@@ -205,7 +205,7 @@ async function handleAsk(event) {
     let answer;
     if(DEMO_MODE){
       await new Promise(r=>setTimeout(r,650));
-      answer={id:Date.now(),role:"assistant",content:"這是展示模式的示意回答。正式模式會呼叫 FastAPI，依目前使用者的部門、角色與文件等級執行混合檢索，並回傳答案與引用條文。",refused:false,latency_ms:1240,feedback:null,created_at:new Date().toISOString(),citations:[{rank:1,doc_title:"公司內部作業規範（展示）",version:"v1.0",article_no:3,score:.86,preview:"展示用假資料，並非正式文件內容。"}]};
+      answer={id:Date.now(),role:"assistant",content:"這是展示模式的示意回答。正式模式會呼叫 FastAPI，依目前使用者的部門、角色與文件等級執行混合檢索，並回傳答案與引用條文。",refused:false,latency_ms:1240,feedback:null,created_at:new Date().toISOString(),citations:[{rank:1,doc_title:"公司內部作業規範（展示）",version:"v1.0",article_no:"第3條",score:.86,preview:"展示用假資料，並非正式文件內容。"}]};
     }else{
       answer=await api.post(`/conversations/${state.conversationId}/messages`,{content});
     }
@@ -246,7 +246,7 @@ async function renderDocuments(root) {
 }
 function showUploadModal() {
   const modal=document.createElement("div");modal.className="upload-modal";modal.innerHTML=`<form class="modal-card" id="uploadForm"><h2>上傳知識文件</h2><p>文件上傳後會進入背景解析與向量化流程。</p>
-  <div class="modal-field"><label>文件檔案</label><input type="file" name="file" accept=".pdf,.docx,.txt" required></div>
+  <div class="modal-field"><label>文件檔案</label><input type="file" name="file" accept=".txt,.md" required></div>
   <div class="modal-field"><label>文件名稱</label><input name="title" required maxlength="255" placeholder="例如：環安衛作業程序"></div>
   <div class="modal-grid"><div class="modal-field"><label>所屬部門</label><select name="dept_code">${state.departments.map(d=>`<option value="${escapeHtml(d.code)}">${escapeHtml(d.name)}</option>`).join("")}</select></div><div class="modal-field"><label>文件等級</label><select name="level"><option value="public">公開</option><option value="dept">部門</option><option value="restricted">限閱</option></select></div></div>
   <div class="modal-grid"><div class="modal-field"><label>版本</label><input name="version" value="v1"></div><div class="modal-field"><label>生效日期</label><input name="effective_date" type="date"></div></div>

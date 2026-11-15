@@ -1,0 +1,27 @@
+# 後端套件（版本為目前 .venv 實際安裝、測試通過的版本）
+# 安裝：python -m pip install -r requirements.txt
+
+# Web 框架與伺服器
+fastapi==0.163.0
+uvicorn==0.54.0
+python-multipart==0.0.33   # 解析 form 與檔案上傳（登入的 form、文件上傳）
+
+# 資料庫
+SQLAlchemy==2.1.8
+psycopg[binary]==3.3.9     # PostgreSQL 驅動（psycopg 3）
+pgvector==0.5.1            # 向量欄位型別
+
+# 設定與資料驗證
+pydantic==2.14.3
+pydantic-settings==2.16.3  # 從 .env 讀設定
+email-validator==2.4.0     # EmailStr 驗證
+
+# 安全
+argon2-cffi==25.1.0        # 密碼雜湊
+PyJWT==2.15.1              # access token
+
+# 呼叫模型服務（Ollama）
+httpx==0.28.1
+
+# 測試
+pytest==9.2.0
