@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101d32">
+  <title>內部知識助理</title>
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <section id="authView" class="auth-view" hidden>
+      <div class="auth-brand">
+        <div class="brand-mark">K</div>
+        <span>KNOWLEDGE <b>DESK</b></span>
+      </div>
+      <div class="auth-card">
+        <div class="eyebrow">INTERNAL KNOWLEDGE ASSISTANT</div>
+        <h1 id="authTitle">登入工作空間</h1>
+        <p class="muted" id="authSubtitle">使用公司帳號存取內部知識與作業規範。</p>
+        <form id="authForm">
+          <label for="email">電子郵件</label>
+          <input id="email" name="email" type="email" autocomplete="username" placeholder="name@company.com" required>
+          <label for="password">密碼</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" placeholder="至少 8 個字元" required>
+          <div id="departmentField" hidden>
+            <label for="department">所屬部門</label>
+            <select id="department" name="department" required></select>
+          </div>
+          <div id="authError" class="form-error" role="alert" hidden></div>
+          <button class="button button-primary button-wide" type="submit" id="authSubmit">登入</button>
+        </form>
+        <p class="auth-switch"><span id="authSwitchText">還沒有帳號？</span> <button class="text-button" id="authSwitch" type="button">建立帳號</button></p>
+        <p class="auth-footnote">系統僅依授權範圍提供文件檢索結果。</p>
+      </div>
+      <div class="auth-side-note">SECURE · TRACEABLE · PRIVATE</div>
+    </section>
+
+    <section id="workspace" class="workspace" hidden>
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark">K</div>
+          <div><strong>KNOWLEDGE DESK</strong><small>INTERNAL ASSISTANT</small></div>
+        </div>
+        <button class="sidebar-nav-link active" id="chatNav">◫　AI 知識助理</button>
+        <button class="button button-new" id="newConversation"><span>＋</span> 新增對話</button>
+        <div class="sidebar-section-label">最近對話</div>
+        <div id="conversationList" class="conversation-list"></div>
+        <div class="sidebar-bottom">
+          <div class="user-chip">
+            <div class="avatar" id="userAvatar">U</div>
+            <div class="user-chip-info"><strong id="userName">使用者</strong><small id="userRole">EMPLOYEE</small></div>
+            <button class="icon-button sidebar-logout" id="logoutButton" title="登出" aria-label="登出">↗</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button class="icon-button mobile-menu" id="menuButton" aria-label="開啟側邊欄">☰</button>
+            <div class="breadcrumb"><span>工作空間</span><i>/</i><strong id="pageHeading">AI 知識助理</strong></div>
+          </div>
+          <div class="topbar-right">
+            <span class="environment-tag" id="environmentTag">API MODE</span>
+            <span class="connection-dot" id="connectionDot"></span>
+            <span class="connection-label" id="connectionLabel">連線中</span>
+            <button class="icon-button topbar-logout" id="topLogout" title="登出" aria-label="登出">登出</button>
+          </div>
+        </header>
+
+        <div class="content-area">
+          <section id="chatPage" class="page chat-page">
+            <div class="chat-heading">
+              <div>
+                <div class="eyebrow">YOUR COMPANY KNOWLEDGE</div>
+                <h1>有問題，從知識開始。</h1>
+                <p class="muted">以自然語言查詢內部文件，答案會附上可追溯的文件出處。</p>
+              </div>
+              <div class="scope-pill"><span class="scope-dot"></span><span id="scopeText">依部門權限檢索</span></div>
+            </div>
+            <div id="chatMessages" class="chat-messages">
+              <div class="welcome-panel" id="welcomePanel">
+                <div class="welcome-icon">K</div>
+                <h2>今天想查詢什麼？</h2>
+                <p>可以詢問 SOP、內部規範、法規或作業流程。</p>
+                <div class="suggestion-grid">
+                  <button class="suggestion" data-prompt="廢溶劑暫存期限與處理流程是什麼？"><span>01</span><b>環安衛規範</b><small>廢溶劑暫存期限與處理流程</small></button>
+                  <button class="suggestion" data-prompt="新產品開發流程需要哪些審核？"><span>02</span><b>研發作業流程</b><small>新產品開發與審核節點</small></button>
+                  <button class="suggestion" data-prompt="公司文件的版本控管原則是什麼？"><span>03</span><b>文件管理</b><small>版本、生效日與作廢規則</small></button>
+                </div>
+              </div>
+            </div>
+            <form id="chatForm" class="composer">
+              <div class="composer-inner">
+                <textarea id="chatInput" rows="1" maxlength="2000" placeholder="輸入你的問題…（Enter 送出，Shift + Enter 換行）"></textarea>
+                <div class="composer-footer">
+                  <span>回答僅依目前可存取的知識文件產生</span>
+                  <button class="button button-primary send-button" id="sendButton" type="submit"><span>送出問題</span><b>↑</b></button>
+                </div>
+              </div>
+            </form>
+            <div class="chat-disclaimer">AI 產生的內容可能需要人工確認，請以文件原文及正式公告為準。</div>
+          </section>
+
+          <section id="adminPage" class="page admin-page" hidden>
+            <div class="admin-heading">
+              <div><div class="eyebrow">SYSTEM CONTROL CENTER</div><h1>管理中心</h1><p class="muted">管理知識文件、使用者存取與系統品質。</p></div>
+              <div class="admin-access-note">IT ADMIN ACCESS</div>
+            </div>
+            <nav class="admin-tabs" aria-label="管理功能">
+              <button class="admin-tab active" data-tab="documents">文件管理</button>
+              <button class="admin-tab" data-tab="users">使用者</button>
+              <button class="admin-tab" data-tab="audit">稽核紀錄</button>
+              <button class="admin-tab" data-tab="evaluation">成效評測</button>
+            </nav>
+            <div id="adminContent" class="admin-content"></div>
+          </section>
+        </div>
+      </main>
+    </section>
+    <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+    <div id="mobileScrim" class="mobile-scrim"></div>
+  </div>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
