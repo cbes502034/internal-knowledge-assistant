@@ -1,19 +1,32 @@
+from contextlib import asynccontextmanager  # 【單元 2】把 async 產生器變成 lifespan 可用的情境管理器
+
 from fastapi import (
-    FastAPI, 
-    Depends, 
-    HTTPException, 
+    FastAPI,
+    Depends,
+    HTTPException,
     status
 )
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db  # 【單元 2】SessionLocal：啟動時自己開 session
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.routers import auth, users
+from app.services.ingestion import mark_interrupted_as_failed  # 【單元 2】啟動時清理卡在 pending 的文件
 
-app = FastAPI(title=settings.app_name)
+
+# 【單元 2】生命週期：yield 之前的程式在伺服器啟動時跑一次，yield 之後的在關閉時跑
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """伺服器啟動時執行一次：上次關機時還在處理的文件標成 failed，管理員才能重新處理。"""
+    with SessionLocal() as db:
+        mark_interrupted_as_failed(db)
+    yield
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.include_router(auth.router)
 app.include_router(users.router)

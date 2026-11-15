@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     chat_model : str = "qwen2.5:3b"
     llm_timeout : float = 120.0  # 本機 CPU 跑 3B 模型生成較慢，逾時要抓寬
 
+    # 【單元 2】上傳的原始檔放哪裡（相對於啟動 uvicorn 的目錄）；重新處理文件時會從這裡讀
+    upload_dir : str = "uploads"
+
     model_config = SettingsConfigDict(env_file = ".env")
 
 settings = Settings()
